@@ -42,19 +42,24 @@ def fragment_status(username: str):
     try:
         r = session.get(url, timeout=15)
         if r.status_code != 200:
-            return None  # never on fragment
+            return None  # never fragment
 
-        html = r.text.lower()
+        soup = BeautifulSoup(r.text, "html.parser")
+        text = r.text.lower()
 
-        # 🔴 SOLD (ownership proof)
-        if "purchased on" in html or "ownership history" in html:
+        # 🔴 SOLD (real sale happened)
+        if "purchased on" in text:
             return "Sold"
 
-        # 🟢 AVAILABLE (buy / auction)
-        if "buy username" in html or "place a bid" in html:
+        # 🟢 AVAILABLE ONLY IF REAL ACTION BUTTON EXISTS
+        buy_btn = soup.find("button", string=lambda x: x and "buy username" in x.lower())
+        bid_btn = soup.find("button", string=lambda x: x and "place a bid" in x.lower())
+
+        if buy_btn or bid_btn:
             return "Available"
 
-        return None  # fragment page but no clear state
+        # ❌ Page exists but NEVER listed / already owned
+        return None
 
     except:
         return None
