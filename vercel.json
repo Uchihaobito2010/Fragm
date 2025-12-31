@@ -1,17 +1,23 @@
 {
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.py"
+    }
+  ],
   "functions": {
-    "api/app.py": {
+    "api/index.py": {
       "runtime": "python3.11",
       "maxDuration": 30,
       "memory": 1024
     }
   },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api/app.py"
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",
@@ -26,9 +32,24 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization"
+          "value": "Content-Type, Authorization, X-Requested-With"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
         }
       ]
     }
-  ]
+  ],
+  "env": {
+    "PYTHONPATH": "/var/task:/var/task/api"
+  }
 }
