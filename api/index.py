@@ -22,8 +22,8 @@ app.add_middleware(
 session = requests.Session()
 session.headers.update({"User-Agent": generate_user_agent()})
 
-DEVELOPER = "Paras Chourasiya"
-CHANNEL = "t.me/aotpy"
+DEVELOPER = "Paras Chourasiya / @Aotpy"
+CHANNEL = "t.me/obitostuffs"
 PORTFOLIO = "https://aotpy.vercel.app/"
 
 def frag_api():
