@@ -23,7 +23,7 @@ session = requests.Session()
 session.headers.update({"User-Agent": generate_user_agent()})
 
 DEVELOPER = "Paras Chourasiya"
-CONTACT = "t.me/aotpy"
+CHANNEL = "t.me/aotpy"
 PORTFOLIO = "https://aotpy.vercel.app/"
 
 def frag_api():
@@ -73,14 +73,14 @@ def check_fgusername(username: str, retries=3):
     message = "✅ This username might be free or not listed on Fragment" if available else ""
 
     return {
-        "developer": DEVELOPER,
-        "Contact": CONTACT,
         "username": tag,
         "price": price,
         "status": status,
         "available": available,
-        "message": message
-
+        "message": message,
+        "developer": DEVELOPER,
+        "channel": CHANNEL,
+        "portfolio": PORTFOLIO
     }
 
 @app.get("/")
@@ -88,11 +88,10 @@ async def root():
     return {
         "message": "Fragment Username Checker API",
         "developer": DEVELOPER,
-        "channel": CHANNEL,
+        "contact": CHANNEL,
         "portfolio": PORTFOLIO,
-        "contact": CONTACT,
         "endpoint": "GET /tobi?username=your_username",
-        "example": "https://tobi-fragment-api.vercel.app/tobi?username=example"
+        "example": "https://tobi-api-fragment.vercel.app/tobi?username=example"
     }
 
 @app.get("/tobi")
