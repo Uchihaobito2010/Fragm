@@ -32,7 +32,7 @@ session.headers.update({
 def is_telegram_taken(username: str) -> bool:
     try:
         r = session.get(f"https://t.me/{username}", timeout=10)
-        return r.status_code == 200 and "tgme_page_title" in r.text
+        return r.status_code == 200 and "tgme_page_title" in r.text.lower()
     except:
         return False
 
@@ -42,23 +42,22 @@ def fragment_status(username: str):
     try:
         r = session.get(url, timeout=15)
         if r.status_code != 200:
-            return None  # never fragment
+            return None  # no fragment page
 
         soup = BeautifulSoup(r.text, "html.parser")
         text = r.text.lower()
 
-        # 🔴 SOLD (real sale happened)
+        # 🔴 SOLD (real proof)
         if "purchased on" in text:
             return "Sold"
 
-        # 🟢 AVAILABLE ONLY IF REAL ACTION BUTTON EXISTS
-        buy_btn = soup.find("button", string=lambda x: x and "buy username" in x.lower())
-        bid_btn = soup.find("button", string=lambda x: x and "place a bid" in x.lower())
+        # 🟢 AVAILABLE (REAL buy / bid button)
+        for btn in soup.find_all("button"):
+            label = btn.get_text(strip=True).lower()
+            if "buy username" in label or "place a bid" in label:
+                return "Available"
 
-        if buy_btn or bid_btn:
-            return "Available"
-
-        # ❌ Page exists but NEVER listed / already owned
+        # ❌ Page exists but never listed / already owned
         return None
 
     except:
@@ -124,7 +123,7 @@ def check_username(username: str = Query(..., min_length=1)):
 
     frag_state = fragment_status(username)
 
-    # 1️⃣ Fragment SOLD
+    # 1️⃣ SOLD on Fragment
     if frag_state == "Sold":
         return {
             "username": f"@{username}",
@@ -137,7 +136,7 @@ def check_username(username: str = Query(..., min_length=1)):
             "contact": CONTACT
         }
 
-    # 2️⃣ Fragment AVAILABLE
+    # 2️⃣ AVAILABLE on Fragment (BUYABLE)
     if frag_state == "Available":
         return {
             "username": f"@{username}",
@@ -151,7 +150,7 @@ def check_username(username: str = Query(..., min_length=1)):
             "contact": CONTACT
         }
 
-    # 3️⃣ Telegram TAKEN (never fragment)
+    # 3️⃣ Telegram TAKEN (never Fragment)
     if is_telegram_taken(username):
         return {
             "username": f"@{username}",
