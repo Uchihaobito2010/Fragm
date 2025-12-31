@@ -79,7 +79,7 @@ def check_fgusername(username: str, retries=3):
         "price": price,
         "status": status,
         "available": available,
-        "message": message,
+        "message": message
 
     }
 
