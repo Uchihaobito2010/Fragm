@@ -1,138 +1,158 @@
 import re
-import time
 import requests
 from bs4 import BeautifulSoup
-from user_agent import generate_user_agent
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import uvicorn
+from user_agent import generate_user_agent
 
-app = FastAPI(title="Fragment Username Checker API")
+# ================== APP ==================
+app = FastAPI(title="Telegram Fragment Username API")
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ================== META ==================
+OWNER = "Paras Chourasiya"
+CONTACT = "t.me/Aotpy"
+PORTFOLIO = "https://aotpy.vercel.app"
+CHANNEL = "@obitoapi / @obitostuffs"
+
+# ================== SESSION ==================
 session = requests.Session()
-session.headers.update({"User-Agent": generate_user_agent()})
+session.headers.update({
+    "User-Agent": generate_user_agent(),
+    "Referer": "https://fragment.com/"
+})
 
-DEVELOPER = "Paras Chourasiya / @Aotpy"
-CHANNEL = "t.me/obitostuffs"
-PORTFOLIO = "https://aotpy.vercel.app/"
-
-def frag_api():
+# ================== TELEGRAM CHECK ==================
+def is_telegram_taken(username: str) -> bool:
     try:
-        r = session.get("https://fragment.com")
-        soup = BeautifulSoup(r.text, 'html.parser')
+        r = session.get(f"https://t.me/{username}", timeout=10)
+        return r.status_code == 200 and "tgme_page_title" in r.text
+    except:
+        return False
+
+# ================== FRAGMENT HASH API ==================
+def get_fragment_api():
+    try:
+        r = session.get("https://fragment.com", timeout=10)
+        soup = BeautifulSoup(r.text, "html.parser")
         for script in soup.find_all("script"):
             if script.string and "apiUrl" in script.string:
-                match = re.search(r'hash=([a-fA-F0-9]+)', script.string)
-                if match:
-                    return f"https://fragment.com/api?hash={match.group(1)}"
-        return None
-    except Exception:
-        return None
+                m = re.search(r"hash=([a-fA-F0-9]+)", script.string)
+                if m:
+                    return f"https://fragment.com/api?hash={m.group(1)}"
+    except:
+        pass
+    return None
 
-def check_fgusername(username: str, retries=3):
-    api_url = frag_api()
-    if not api_url:
-        return {"error": f"Could not get API URL for @{username}"}
+def fragment_price(username: str):
+    api = get_fragment_api()
+    if not api:
+        return None, None
 
-    data = {"type": "usernames", "query": username, "method": "searchAuctions"}
+    payload = {
+        "type": "usernames",
+        "query": username,
+        "method": "searchAuctions"
+    }
+
     try:
-        response = session.post(api_url, data=data).json()
-    except Exception:
-        if retries > 0:
-            time.sleep(2)
-            return check_fgusername(username, retries - 1)
-        return {"error": "API request failed"}
+        r = session.post(api, data=payload, timeout=10).json()
+        html = r.get("html")
+        if not html:
+            return None, None
 
-    html_data = response.get("html")
-    if not html_data and retries > 0:
-        time.sleep(2)
-        return check_fgusername(username, retries - 1)
-    elif not html_data:
-        # If no HTML returned, username is not on Fragment
+        soup = BeautifulSoup(html, "html.parser")
+        values = soup.find_all("div", class_="tm-value")
+        if len(values) < 3:
+            return None, None
+
+        price = values[1].get_text(strip=True)
+        status = values[2].get_text(strip=True)
+
+        return price, status
+    except:
+        return None, None
+
+# ================== FRAGMENT PAGE CHECK ==================
+def fragment_page(username: str):
+    url = f"https://fragment.com/username/{username}"
+    try:
+        r = session.get(url, timeout=15)
+        if r.status_code != 200:
+            return False, None
+
+        html = r.text.lower()
+
+        if "this username was sold" in html or "final price" in html:
+            return True, "Sold"
+
+        if "buy username" in html or "place a bid" in html:
+            return True, "Available"
+
+    except:
+        pass
+
+    return False, None
+
+# ================== ROOT ==================
+@app.get("/")
+def home():
+    return {
+        "api": "Telegram Fragment Username Check API",
+        "usage": "/check?username=tobi",
+        "status": "online",
+        "owner": OWNER,
+        "contact": CONTACT,
+        "portfolio": PORTFOLIO,
+        "channel": CHANNEL
+    }
+
+# ================== MAIN ENDPOINT ==================
+@app.get("/check")
+def check_username(username: str = Query(..., min_length=1)):
+    username = username.replace("@", "").lower().strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username required")
+
+    # 1️⃣ Telegram check
+    if is_telegram_taken(username):
         return {
-            "username": username,
-            "status": "Not available",  # Fragment pe nahi hai
-            "price": "N/A",
-            "on_fragment": "No",
-            "can_claim": "Yes"  # Fragment pe nahi hai, so claim kar sakte ho
+            "username": f"@{username}",
+            "status": "Taken",
+            "on_fragment": False,
+            "price_ton": "Unknown",
+            "can_claim": False
         }
 
-    soup = BeautifulSoup(html_data, 'html.parser')
-    elements = soup.find_all("div", class_="tm-value")
-    if len(elements) < 3:
-        return {"error": "Not enough info in response"}
+    # 2️⃣ Fragment page
+    on_fragment, frag_status = fragment_page(username)
+    if on_fragment:
+        price, _ = fragment_price(username)
+        return {
+            "username": f"@{username}",
+            "status": frag_status,
+            "on_fragment": True,
+            "price_ton": price or "Unknown",
+            "can_claim": False,
+            "message": "Buy from Fragment",
+            "fragment_url": f"https://fragment.com/username/{username}"
+        }
 
-    tag = elements[0].get_text(strip=True)
-    price = elements[1].get_text(strip=True)
-    raw_status = elements[2].get_text(strip=True)
-
-    # DEBUG: Log what we're getting
-    print(f"DEBUG - Username: {tag}, Price: {price}, Raw Status: {raw_status}")
-    
-    # Fix logic here:
-    # Agar Fragment pe "Available" dikha raha hai, matlab username FOR SALE hai Fragment pe
-    # Agar "Unavailable" dikha raha hai, matlab username Fragment pe listed nahi hai
-    
-    if raw_status.lower() == "available":
-        # Username Fragment pe available hai (for sale)
-        status_text = "Available"
-        on_fragment = "Yes"
-        can_claim = "Yes"  # Ha, khareed sakte ho Fragment se
-    else:
-        # Username Fragment pe nahi hai
-        status_text = "Not available"  # Fragment pe available nahi hai
-        on_fragment = "No"
-        can_claim = "Yes"  # Fragment pe nahi hai, to claim kar sakte ho (agar Telegram pe free hai)
-        price = "N/A"
-
+    # 3️⃣ Claimable
     return {
-        "username": tag,
-        "status": status_text,
-        "price": price,
-        "on_fragment": on_fragment,
-        "can_claim": can_claim
+        "username": f"@{username}",
+        "status": "Available",
+        "on_fragment": False,
+        "price_ton": "Unknown",
+        "can_claim": True,
+        "message": "Can be claimed directly"
     }
 
-@app.get("/")
-async def root():
-    return {
-        "message": "Fragment Username Checker API",
-        "developer": DEVELOPER,
-        "channel": CHANNEL,
-        "portfolio": PORTFOLIO,
-        "endpoint": "GET /tobi?username=your_username",
-        "example": "https://tobi-api-fragm.vercel.app/tobi?username=example"
-    }
-
-@app.get("/tobi")
-async def check_username(username: str = Query(..., min_length=1)):
-    username = username.strip().lower()
-    if not username:
-        raise HTTPException(status_code=400, detail="username is required")
-    result = check_fgusername(username)
-    if "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
-    return result
-
-@app.get("/api/health")
-async def health_check():
-    return {"status": "healthy"}
-
-@app.exception_handler(404)
-async def not_found(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=404,
-        content={"error": "Endpoint not found", "available_endpoints": ["/", "/tobi?username=xxx", "/api/health"]}
-    )
-
+# ================== REQUIRED FOR VERCEL ==================
 app = app
