@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from user_agent import generate_user_agent
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 import uvicorn
 
 app = FastAPI(title="Fragment Username Checker API")
@@ -73,14 +73,13 @@ def check_fgusername(username: str, retries=3):
     message = "✅ This username might be free or not listed on Fragment" if available else ""
 
     return {
+        "developer": DEVELOPER,
         "username": tag,
         "price": price,
         "status": status,
         "available": available,
-        "message": message,
-        "developer": DEVELOPER,
-        "channel": CHANNEL,
-        "portfolio": PORTFOLIO
+        "message": message
+        
     }
 
 @app.get("/")
