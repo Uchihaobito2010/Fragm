@@ -36,32 +36,52 @@ def is_telegram_taken(username: str) -> bool:
     except:
         return False
 
-# ================== FRAGMENT HASH API ==================
-def get_fragment_api():
+# ================== FRAGMENT STATUS ==================
+def fragment_status(username: str):
+    url = f"https://fragment.com/username/{username}"
+    try:
+        r = session.get(url, timeout=15)
+        if r.status_code != 200:
+            return None  # never on fragment
+
+        html = r.text.lower()
+
+        # 🔴 SOLD (ownership proof)
+        if "purchased on" in html or "ownership history" in html:
+            return "Sold"
+
+        # 🟢 AVAILABLE (buy / auction)
+        if "buy username" in html or "place a bid" in html:
+            return "Available"
+
+        return None  # fragment page but no clear state
+
+    except:
+        return None
+
+# ================== FRAGMENT PRICE ==================
+def fragment_price(username: str):
     try:
         r = session.get("https://fragment.com", timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
-        for script in soup.find_all("script"):
-            if script.string and "apiUrl" in script.string:
-                m = re.search(r"hash=([a-fA-F0-9]+)", script.string)
+
+        api = None
+        for s in soup.find_all("script"):
+            if s.string and "apiUrl" in s.string:
+                m = re.search(r"hash=([a-fA-F0-9]+)", s.string)
                 if m:
-                    return f"https://fragment.com/api?hash={m.group(1)}"
-    except:
-        pass
-    return None
+                    api = f"https://fragment.com/api?hash={m.group(1)}"
+                    break
 
-def fragment_price(username: str):
-    api = get_fragment_api()
-    if not api:
-        return None
+        if not api:
+            return None
 
-    payload = {
-        "type": "usernames",
-        "query": username,
-        "method": "searchAuctions"
-    }
+        payload = {
+            "type": "usernames",
+            "query": username,
+            "method": "searchAuctions"
+        }
 
-    try:
         r = session.post(api, data=payload, timeout=10).json()
         html = r.get("html")
         if not html:
@@ -69,51 +89,13 @@ def fragment_price(username: str):
 
         soup = BeautifulSoup(html, "html.parser")
         values = soup.find_all("div", class_="tm-value")
-        if len(values) < 2:
-            return None
-
-        return values[1].get_text(strip=True)
-    except:
-        return None
-
-# ================== FRAGMENT PAGE CHECK (UPGRADED) ==================
-
-def fragment_page(username: str):
-    url = f"https://fragment.com/username/{username}"
-    try:
-        r = session.get(url, timeout=15)
-        if r.status_code != 200:
-            return False, None
-
-        html = r.text.lower()
-
-        # 🔴 STRONG SOLD / CLAIMED INDICATORS
-        sold_signals = [
-            "purchased on",
-            "ownership history",
-            "owned by",
-            "transferred to",
-            "owner:"
-        ]
-
-        for s in sold_signals:
-            if s in html:
-                return True, "Sold"
-
-        # 🟢 BUYABLE / AUCTION (ONLY IF NOT SOLD)
-        buy_signals = [
-            "buy username",
-            "place a bid"
-        ]
-
-        for b in buy_signals:
-            if b in html:
-                return True, "Available"
+        if len(values) >= 2:
+            return values[1].get_text(strip=True)
 
     except:
         pass
 
-    return False, None
+    return None
 
 # ================== ROOT ==================
 @app.get("/")
@@ -135,50 +117,58 @@ def check_username(username: str = Query(..., min_length=1)):
     if not username:
         raise HTTPException(status_code=400, detail="username required")
 
-    # 1️⃣ Fragment page (SOURCE OF TRUTH)
-    on_fragment, frag_status = fragment_page(username)
-    if on_fragment:
-        price = fragment_price(username)
-        return {
-            "username": f"@{username}",
-            "status": frag_status,          # Sold / Available
-            "on_fragment": True,
-            "price_ton": price or "Unknown",
-            "can_claim": False,
-            "message": (
-                "Buy from Fragment"
-                if frag_status == "Available"
-                else "Already sold on Fragment"
-            ),
-            "fragment_url": f"https://fragment.com/username/{username}",
-            "api_owner": OWNER,
-            "contact": CONTACT,
-        }
+    frag_state = fragment_status(username)
 
-    # 2️⃣ Telegram check (fallback)
-    if is_telegram_taken(username):
+    # 1️⃣ Fragment SOLD
+    if frag_state == "Sold":
         return {
             "username": f"@{username}",
             "status": "Sold",
+            "on_fragment": True,
+            "price_ton": fragment_price(username) or "Unknown",
+            "can_claim": False,
+            "fragment_url": f"https://fragment.com/username/{username}",
+            "api_owner": OWNER,
+            "contact": CONTACT
+        }
+
+    # 2️⃣ Fragment AVAILABLE
+    if frag_state == "Available":
+        return {
+            "username": f"@{username}",
+            "status": "Available",
+            "on_fragment": True,
+            "price_ton": fragment_price(username) or "Unknown",
+            "can_claim": False,
+            "message": "Buy from Fragment",
+            "fragment_url": f"https://fragment.com/username/{username}",
+            "api_owner": OWNER,
+            "contact": CONTACT
+        }
+
+    # 3️⃣ Telegram TAKEN (never fragment)
+    if is_telegram_taken(username):
+        return {
+            "username": f"@{username}",
+            "status": "Taken",
             "on_fragment": False,
             "price_ton": "Unknown",
             "can_claim": False,
-            "message": "Username already owned",
             "api_owner": OWNER,
-            "contact": CONTACT,
+            "contact": CONTACT
         }
 
-    # 3️⃣ Claimable
+    # 4️⃣ FREE
     return {
         "username": f"@{username}",
-        "status": "Available",
+        "status": "Free",
         "on_fragment": False,
         "price_ton": "Unknown",
         "can_claim": True,
         "message": "Can be claimed directly",
         "api_owner": OWNER,
-        "contact": CONTACT,
+        "contact": CONTACT
     }
 
-# ================== REQUIRED FOR VERCEL ==================
+# ================== VERCEL ==================
 app = app
