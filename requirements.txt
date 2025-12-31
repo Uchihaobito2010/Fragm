@@ -5,6 +5,3 @@ beautifulsoup4==4.12.2
 user-agent==0.1.10
 pydantic==2.5.0
 python-multipart==0.0.6
-mangum==0.17.0
-aiofiles==23.2.1
-httpx==0.25.1
