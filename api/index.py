@@ -88,10 +88,10 @@ async def root():
     return {
         "message": "Fragment Username Checker API",
         "developer": DEVELOPER,
-        "contact": CHANNEL,
+        "channel": CHANNEL,
         "portfolio": PORTFOLIO,
         "endpoint": "GET /tobi?username=your_username",
-        "example": "https://tobi-api-fragment.vercel.app/tobi?username=example"
+        "example": "https://your-app.vercel.app/tobi?username=example"
     }
 
 @app.get("/tobi")
