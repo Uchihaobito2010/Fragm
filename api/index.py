@@ -5,7 +5,6 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from user_agent import generate_user_agent
 
-# ================== APP ==================
 app = FastAPI(title="Telegram Fragment Username API")
 
 app.add_middleware(
@@ -15,28 +14,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ================== META ==================
 OWNER = "Paras Chourasiya"
 CONTACT = "t.me/Aotpy"
-PORTFOLIO = "https://aotpy.vercel.app"
-CHANNEL = "@obitoapi / @obitostuffs"
 
-# ================== SESSION ==================
 session = requests.Session()
 session.headers.update({
     "User-Agent": generate_user_agent(),
     "Referer": "https://fragment.com/"
 })
 
-# ================== TELEGRAM CHECK ==================
-def is_telegram_taken(username: str) -> bool:
+# ---------- Telegram check ----------
+def telegram_exists(username: str) -> bool:
     try:
         r = session.get(f"https://t.me/{username}", timeout=10)
-        return r.status_code == 200 and "tgme_page_title" in r.text.lower()
+        return r.status_code == 200
     except:
         return False
 
-# ================== FRAGMENT API (CORRECT METHOD) ==================
+# ---------- Fragment SOLD ----------
+def fragment_sold(username: str) -> bool:
+    try:
+        r = session.get(f"https://fragment.com/username/{username}", timeout=10)
+        return "purchased on" in r.text.lower()
+    except:
+        return False
+
+# ---------- Fragment API (search = ALL listings) ----------
 def fragment_api_html(username: str):
     try:
         r = session.get("https://fragment.com", timeout=10)
@@ -56,7 +59,7 @@ def fragment_api_html(username: str):
         payload = {
             "type": "usernames",
             "query": username,
-            "method": "search"  # ✅ IMPORTANT FIX
+            "method": "search"
         }
 
         data = session.post(api, data=payload, timeout=10).json()
@@ -65,8 +68,8 @@ def fragment_api_html(username: str):
     except:
         return None
 
-# ================== FRAGMENT PRICE ==================
-def fragment_price_from_html(html: str):
+# ---------- Fragment price ----------
+def fragment_price(html: str):
     if not html:
         return None
     soup = BeautifulSoup(html, "html.parser")
@@ -75,85 +78,63 @@ def fragment_price_from_html(html: str):
         return values[1].get_text(strip=True)
     return None
 
-# ================== FRAGMENT SOLD CHECK ==================
-def fragment_sold(username: str) -> bool:
-    try:
-        r = session.get(f"https://fragment.com/username/{username}", timeout=15)
-        return "purchased on" in r.text.lower()
-    except:
-        return False
-
-# ================== ROOT ==================
-@app.get("/")
-def home():
-    return {
-        "api": "Telegram Fragment Username Check API",
-        "usage": "/check?username=tobi",
-        "status": "online",
-        "owner": OWNER,
-        "contact": CONTACT,
-        "portfolio": PORTFOLIO,
-        "channel": CHANNEL
-    }
-
-# ================== MAIN ENDPOINT ==================
+# ---------- MAIN ----------
 @app.get("/check")
-def check_username(username: str = Query(..., min_length=1)):
+def check(username: str = Query(...)):
     username = username.replace("@", "").lower().strip()
     if not username:
-        raise HTTPException(status_code=400, detail="username required")
+        raise HTTPException(status_code=400, detail="Invalid username")
 
-    # 1️⃣ SOLD (ownership confirmed)
+    # 1️⃣ SOLD
     if fragment_sold(username):
         return {
             "username": f"@{username}",
             "status": "Sold",
             "on_fragment": True,
-            "price_ton": "Unknown",
             "can_claim": False,
+            "price_ton": "Unknown",
             "fragment_url": f"https://fragment.com/username/{username}",
             "api_owner": OWNER,
             "contact": CONTACT
         }
 
-    # 2️⃣ FRAGMENT LISTED (buyable / auction)
+    # 2️⃣ AVAILABLE (Fragment listing)
     frag_html = fragment_api_html(username)
     if frag_html:
         return {
             "username": f"@{username}",
             "status": "Available",
             "on_fragment": True,
-            "price_ton": fragment_price_from_html(frag_html) or "Unknown",
             "can_claim": False,
+            "price_ton": fragment_price(frag_html) or "Unknown",
             "message": "Buy from Fragment",
             "fragment_url": f"https://fragment.com/username/{username}",
             "api_owner": OWNER,
             "contact": CONTACT
         }
 
-    # 3️⃣ TELEGRAM TAKEN (never fragment)
-    if is_telegram_taken(username):
+    # 3️⃣ TAKEN (default for old / owned usernames)
+    if telegram_exists(username):
         return {
             "username": f"@{username}",
             "status": "Taken",
             "on_fragment": False,
-            "price_ton": "Unknown",
             "can_claim": False,
+            "price_ton": "Unknown",
             "api_owner": OWNER,
             "contact": CONTACT
         }
 
-    # 4️⃣ FREE
+    # 4️⃣ FREE (only if NOTHING exists)
     return {
         "username": f"@{username}",
         "status": "Free",
         "on_fragment": False,
-        "price_ton": "Unknown",
         "can_claim": True,
+        "price_ton": "Unknown",
         "message": "Can be claimed directly",
         "api_owner": OWNER,
         "contact": CONTACT
     }
 
-# ================== VERCEL ==================
 app = app
