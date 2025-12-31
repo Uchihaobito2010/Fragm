@@ -77,6 +77,7 @@ def fragment_price(username: str):
         return None
 
 # ================== FRAGMENT PAGE CHECK (UPGRADED) ==================
+
 def fragment_page(username: str):
     url = f"https://fragment.com/username/{username}"
     try:
@@ -86,28 +87,13 @@ def fragment_page(username: str):
 
         html = r.text.lower()
 
-        # 🔴 DEFINITE SOLD INDICATORS
-        sold_keywords = [
-            "sold",
-            "purchased on",
-            "ownership history",
-            "owner"
-        ]
+        # 🔴 DEFINITE SOLD (ONLY THIS)
+        if "purchased on" in html:
+            return True, "Sold"
 
-        for k in sold_keywords:
-            if k in html:
-                return True, "Sold"
-
-        # 🟠 BUYABLE / AUCTION
-        buy_keywords = [
-            "buy username",
-            "place a bid",
-            "sale price"
-        ]
-
-        for k in buy_keywords:
-            if k in html:
-                return True, "Available"
+        # 🟢 BUYABLE / AUCTION
+        if "buy username" in html or "place a bid" in html:
+            return True, "Available"
 
     except:
         pass
