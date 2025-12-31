@@ -36,35 +36,8 @@ def is_telegram_taken(username: str) -> bool:
     except:
         return False
 
-# ================== FRAGMENT STATUS ==================
-def fragment_status(username: str):
-    url = f"https://fragment.com/username/{username}"
-    try:
-        r = session.get(url, timeout=15)
-        if r.status_code != 200:
-            return None  # no fragment page
-
-        soup = BeautifulSoup(r.text, "html.parser")
-        text = r.text.lower()
-
-        # 🔴 SOLD (real proof)
-        if "purchased on" in text:
-            return "Sold"
-
-        # 🟢 AVAILABLE (REAL buy / bid button)
-        for btn in soup.find_all("button"):
-            label = btn.get_text(strip=True).lower()
-            if "buy username" in label or "place a bid" in label:
-                return "Available"
-
-        # ❌ Page exists but never listed / already owned
-        return None
-
-    except:
-        return None
-
-# ================== FRAGMENT PRICE ==================
-def fragment_price(username: str):
+# ================== FRAGMENT API (SOURCE OF TRUTH) ==================
+def fragment_api_html(username: str):
     try:
         r = session.get("https://fragment.com", timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
@@ -86,20 +59,29 @@ def fragment_price(username: str):
             "method": "searchAuctions"
         }
 
-        r = session.post(api, data=payload, timeout=10).json()
-        html = r.get("html")
-        if not html:
-            return None
-
-        soup = BeautifulSoup(html, "html.parser")
-        values = soup.find_all("div", class_="tm-value")
-        if len(values) >= 2:
-            return values[1].get_text(strip=True)
+        data = session.post(api, data=payload, timeout=10).json()
+        return data.get("html")
 
     except:
-        pass
+        return None
 
+# ================== FRAGMENT PRICE ==================
+def fragment_price_from_html(html: str):
+    if not html:
+        return None
+    soup = BeautifulSoup(html, "html.parser")
+    values = soup.find_all("div", class_="tm-value")
+    if len(values) >= 2:
+        return values[1].get_text(strip=True)
     return None
+
+# ================== FRAGMENT SOLD CHECK (PAGE) ==================
+def fragment_sold(username: str) -> bool:
+    try:
+        r = session.get(f"https://fragment.com/username/{username}", timeout=15)
+        return "purchased on" in r.text.lower()
+    except:
+        return False
 
 # ================== ROOT ==================
 @app.get("/")
@@ -121,28 +103,28 @@ def check_username(username: str = Query(..., min_length=1)):
     if not username:
         raise HTTPException(status_code=400, detail="username required")
 
-    frag_state = fragment_status(username)
-
-    # 1️⃣ SOLD on Fragment
-    if frag_state == "Sold":
+    # 1️⃣ Fragment SOLD (real ownership)
+    if fragment_sold(username):
         return {
             "username": f"@{username}",
             "status": "Sold",
             "on_fragment": True,
-            "price_ton": fragment_price(username) or "Unknown",
+            "price_ton": "Unknown",
             "can_claim": False,
             "fragment_url": f"https://fragment.com/username/{username}",
             "api_owner": OWNER,
             "contact": CONTACT
         }
 
-    # 2️⃣ AVAILABLE on Fragment (BUYABLE)
-    if frag_state == "Available":
+    # 2️⃣ Fragment API (buyable like @tobi)
+    frag_html = fragment_api_html(username)
+    if frag_html:
+        price = fragment_price_from_html(frag_html)
         return {
             "username": f"@{username}",
             "status": "Available",
             "on_fragment": True,
-            "price_ton": fragment_price(username) or "Unknown",
+            "price_ton": price or "Unknown",
             "can_claim": False,
             "message": "Buy from Fragment",
             "fragment_url": f"https://fragment.com/username/{username}",
@@ -150,7 +132,7 @@ def check_username(username: str = Query(..., min_length=1)):
             "contact": CONTACT
         }
 
-    # 3️⃣ Telegram TAKEN (never Fragment)
+    # 3️⃣ Telegram taken (never fragment)
     if is_telegram_taken(username):
         return {
             "username": f"@{username}",
@@ -162,7 +144,7 @@ def check_username(username: str = Query(..., min_length=1)):
             "contact": CONTACT
         }
 
-    # 4️⃣ FREE
+    # 4️⃣ Free
     return {
         "username": f"@{username}",
         "status": "Free",
