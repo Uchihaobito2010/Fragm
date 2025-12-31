@@ -23,7 +23,7 @@ session = requests.Session()
 session.headers.update({"User-Agent": generate_user_agent()})
 
 DEVELOPER = "Paras Chourasiya / @Aotpy"
-CHANNEL = "@obitostuffs and @Obitoapi"
+CHANNEL = "t.me/obitostuffs"
 PORTFOLIO = "https://aotpy.vercel.app/"
 
 def frag_api():
@@ -58,7 +58,14 @@ def check_fgusername(username: str, retries=3):
         time.sleep(2)
         return check_fgusername(username, retries - 1)
     elif not html_data:
-        return {"error": "No HTML returned from Fragment API"}
+        # If no HTML returned, username is not on Fragment
+        return {
+            "username": username,
+            "status": "Not available",  # Fragment pe nahi hai
+            "price": "N/A",
+            "on_fragment": "No",
+            "can_claim": "Yes"  # Fragment pe nahi hai, so claim kar sakte ho
+        }
 
     soup = BeautifulSoup(html_data, 'html.parser')
     elements = soup.find_all("div", class_="tm-value")
@@ -67,21 +74,28 @@ def check_fgusername(username: str, retries=3):
 
     tag = elements[0].get_text(strip=True)
     price = elements[1].get_text(strip=True)
-    status = elements[2].get_text(strip=True)
+    raw_status = elements[2].get_text(strip=True)
 
-    available = status.lower() == "unavailable"
+    # DEBUG: Log what we're getting
+    print(f"DEBUG - Username: {tag}, Price: {price}, Raw Status: {raw_status}")
     
-    # Determine status text
-    status_text = "Available" if not available else "Not available"
+    # Fix logic here:
+    # Agar Fragment pe "Available" dikha raha hai, matlab username FOR SALE hai Fragment pe
+    # Agar "Unavailable" dikha raha hai, matlab username Fragment pe listed nahi hai
     
-    # Determine if on fragment
-    on_fragment = "Yes" if not available else "No"
-    
-    # Can claim logic
-    can_claim = "Yes" if available else "No"
+    if raw_status.lower() == "available":
+        # Username Fragment pe available hai (for sale)
+        status_text = "Available"
+        on_fragment = "Yes"
+        can_claim = "Yes"  # Ha, khareed sakte ho Fragment se
+    else:
+        # Username Fragment pe nahi hai
+        status_text = "Not available"  # Fragment pe available nahi hai
+        on_fragment = "No"
+        can_claim = "Yes"  # Fragment pe nahi hai, to claim kar sakte ho (agar Telegram pe free hai)
+        price = "N/A"
 
     return {
-        "developer": DEVELOPER,
         "username": tag,
         "status": status_text,
         "price": price,
@@ -121,5 +135,4 @@ async def not_found(request: Request, exc: Exception):
         content={"error": "Endpoint not found", "available_endpoints": ["/", "/tobi?username=xxx", "/api/health"]}
     )
 
-# This is required for Vercel to run the app
 app = app
