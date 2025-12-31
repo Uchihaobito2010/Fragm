@@ -23,7 +23,7 @@ session = requests.Session()
 session.headers.update({"User-Agent": generate_user_agent()})
 
 DEVELOPER = "Paras Chourasiya / @Aotpy"
-CHANNEL = "t.me/obitostuffs"
+CHANNEL = "@obitostuffs and @Obitoapi"
 PORTFOLIO = "https://aotpy.vercel.app/"
 
 def frag_api():
@@ -97,7 +97,7 @@ async def root():
         "channel": CHANNEL,
         "portfolio": PORTFOLIO,
         "endpoint": "GET /tobi?username=your_username",
-        "example": "https://your-app.vercel.app/tobi?username=example"
+        "example": "https://tobi-api-fragm.vercel.app/tobi?username=example"
     }
 
 @app.get("/tobi")
