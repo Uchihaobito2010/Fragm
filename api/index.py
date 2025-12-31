@@ -53,7 +53,7 @@ def get_fragment_api():
 def fragment_price(username: str):
     api = get_fragment_api()
     if not api:
-        return None, None
+        return None
 
     payload = {
         "type": "usernames",
@@ -65,21 +65,18 @@ def fragment_price(username: str):
         r = session.post(api, data=payload, timeout=10).json()
         html = r.get("html")
         if not html:
-            return None, None
+            return None
 
         soup = BeautifulSoup(html, "html.parser")
         values = soup.find_all("div", class_="tm-value")
-        if len(values) < 3:
-            return None, None
+        if len(values) < 2:
+            return None
 
-        price = values[1].get_text(strip=True)
-        status = values[2].get_text(strip=True)
-
-        return price, status
+        return values[1].get_text(strip=True)
     except:
-        return None, None
+        return None
 
-# ================== FRAGMENT PAGE CHECK ==================
+# ================== FRAGMENT PAGE CHECK (UPGRADED) ==================
 def fragment_page(username: str):
     url = f"https://fragment.com/username/{username}"
     try:
@@ -89,11 +86,28 @@ def fragment_page(username: str):
 
         html = r.text.lower()
 
-        if "this username was sold" in html or "final price" in html:
-            return True, "Sold"
+        # 🔴 DEFINITE SOLD INDICATORS
+        sold_keywords = [
+            "sold",
+            "purchased on",
+            "ownership history",
+            "owner"
+        ]
 
-        if "buy username" in html or "place a bid" in html:
-            return True, "Available"
+        for k in sold_keywords:
+            if k in html:
+                return True, "Sold"
+
+        # 🟠 BUYABLE / AUCTION
+        buy_keywords = [
+            "buy username",
+            "place a bid",
+            "sale price"
+        ]
+
+        for k in buy_keywords:
+            if k in html:
+                return True, "Available"
 
     except:
         pass
@@ -120,30 +134,35 @@ def check_username(username: str = Query(..., min_length=1)):
     if not username:
         raise HTTPException(status_code=400, detail="username required")
 
-    # 1️⃣ Telegram check
-    if is_telegram_taken(username):
+    # 1️⃣ Fragment page (SOURCE OF TRUTH)
+    on_fragment, frag_status = fragment_page(username)
+    if on_fragment:
+        price = fragment_price(username)
         return {
             "username": f"@{username}",
-            "status": "Taken",
-            "on_fragment": False,
-            "price_ton": "Unknown",
+            "status": frag_status,          # Sold / Available
+            "on_fragment": True,
+            "price_ton": price or "Unknown",
             "can_claim": False,
+            "message": (
+                "Buy from Fragment"
+                if frag_status == "Available"
+                else "Already sold on Fragment"
+            ),
+            "fragment_url": f"https://fragment.com/username/{username}",
             "api_owner": OWNER,
             "contact": CONTACT,
         }
 
-    # 2️⃣ Fragment page
-    on_fragment, frag_status = fragment_page(username)
-    if on_fragment:
-        price, _ = fragment_price(username)
+    # 2️⃣ Telegram check (fallback)
+    if is_telegram_taken(username):
         return {
             "username": f"@{username}",
-            "status": frag_status,
-            "on_fragment": True,
-            "price_ton": price or "Unknown",
+            "status": "Sold",
+            "on_fragment": False,
+            "price_ton": "Unknown",
             "can_claim": False,
-            "message": "Buy from Fragment",
-            "fragment_url": f"https://fragment.com/username/{username}",
+            "message": "Username already owned",
             "api_owner": OWNER,
             "contact": CONTACT,
         }
