@@ -36,7 +36,7 @@ def is_telegram_taken(username: str) -> bool:
     except:
         return False
 
-# ================== FRAGMENT API (SOURCE OF TRUTH) ==================
+# ================== FRAGMENT API (CORRECT METHOD) ==================
 def fragment_api_html(username: str):
     try:
         r = session.get("https://fragment.com", timeout=10)
@@ -56,7 +56,7 @@ def fragment_api_html(username: str):
         payload = {
             "type": "usernames",
             "query": username,
-            "method": "searchAuctions"
+            "method": "search"  # ✅ IMPORTANT FIX
         }
 
         data = session.post(api, data=payload, timeout=10).json()
@@ -75,7 +75,7 @@ def fragment_price_from_html(html: str):
         return values[1].get_text(strip=True)
     return None
 
-# ================== FRAGMENT SOLD CHECK (PAGE) ==================
+# ================== FRAGMENT SOLD CHECK ==================
 def fragment_sold(username: str) -> bool:
     try:
         r = session.get(f"https://fragment.com/username/{username}", timeout=15)
@@ -103,7 +103,7 @@ def check_username(username: str = Query(..., min_length=1)):
     if not username:
         raise HTTPException(status_code=400, detail="username required")
 
-    # 1️⃣ Fragment SOLD (real ownership)
+    # 1️⃣ SOLD (ownership confirmed)
     if fragment_sold(username):
         return {
             "username": f"@{username}",
@@ -116,15 +116,14 @@ def check_username(username: str = Query(..., min_length=1)):
             "contact": CONTACT
         }
 
-    # 2️⃣ Fragment API (buyable like @tobi)
+    # 2️⃣ FRAGMENT LISTED (buyable / auction)
     frag_html = fragment_api_html(username)
     if frag_html:
-        price = fragment_price_from_html(frag_html)
         return {
             "username": f"@{username}",
             "status": "Available",
             "on_fragment": True,
-            "price_ton": price or "Unknown",
+            "price_ton": fragment_price_from_html(frag_html) or "Unknown",
             "can_claim": False,
             "message": "Buy from Fragment",
             "fragment_url": f"https://fragment.com/username/{username}",
@@ -132,7 +131,7 @@ def check_username(username: str = Query(..., min_length=1)):
             "contact": CONTACT
         }
 
-    # 3️⃣ Telegram taken (never fragment)
+    # 3️⃣ TELEGRAM TAKEN (never fragment)
     if is_telegram_taken(username):
         return {
             "username": f"@{username}",
@@ -144,7 +143,7 @@ def check_username(username: str = Query(..., min_length=1)):
             "contact": CONTACT
         }
 
-    # 4️⃣ Free
+    # 4️⃣ FREE
     return {
         "username": f"@{username}",
         "status": "Free",
