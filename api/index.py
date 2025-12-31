@@ -87,13 +87,28 @@ def fragment_page(username: str):
 
         html = r.text.lower()
 
-        # 🔴 DEFINITE SOLD (ONLY THIS)
-        if "purchased on" in html:
-            return True, "Sold"
+        # 🔴 STRONG SOLD / CLAIMED INDICATORS
+        sold_signals = [
+            "purchased on",
+            "ownership history",
+            "owned by",
+            "transferred to",
+            "owner:"
+        ]
 
-        # 🟢 BUYABLE / AUCTION
-        if "buy username" in html or "place a bid" in html:
-            return True, "Available"
+        for s in sold_signals:
+            if s in html:
+                return True, "Sold"
+
+        # 🟢 BUYABLE / AUCTION (ONLY IF NOT SOLD)
+        buy_signals = [
+            "buy username",
+            "place a bid"
+        ]
+
+        for b in buy_signals:
+            if b in html:
+                return True, "Available"
 
     except:
         pass
