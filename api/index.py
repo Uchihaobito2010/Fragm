@@ -23,10 +23,18 @@ session.headers.update({
     "Referer": "https://fragment.com/"
 })
 
-# ---------- Telegram check ----------
+# ---------- Telegram page ----------
 def telegram_exists(username: str) -> bool:
     try:
-        r = session.get(f"https://t.me/{username}", timeout=10)
+        r = session.get(f"https://t.me/{username}", timeout=8)
+        return r.status_code == 200
+    except:
+        return False
+
+# ---------- Fragment page ----------
+def fragment_page_exists(username: str) -> bool:
+    try:
+        r = session.get(f"https://fragment.com/username/{username}", timeout=8)
         return r.status_code == 200
     except:
         return False
@@ -34,15 +42,15 @@ def telegram_exists(username: str) -> bool:
 # ---------- Fragment SOLD ----------
 def fragment_sold(username: str) -> bool:
     try:
-        r = session.get(f"https://fragment.com/username/{username}", timeout=10)
+        r = session.get(f"https://fragment.com/username/{username}", timeout=8)
         return "purchased on" in r.text.lower()
     except:
         return False
 
-# ---------- Fragment API (search = ALL listings) ----------
-def fragment_api_html(username: str):
+# ---------- Fragment API (ALL listings) ----------
+def fragment_api_hit(username: str):
     try:
-        r = session.get("https://fragment.com", timeout=10)
+        r = session.get("https://fragment.com", timeout=8)
         soup = BeautifulSoup(r.text, "html.parser")
 
         api = None
@@ -59,16 +67,16 @@ def fragment_api_html(username: str):
         payload = {
             "type": "usernames",
             "query": username,
-            "method": "search"
+            "method": "search"   # IMPORTANT
         }
 
-        data = session.post(api, data=payload, timeout=10).json()
+        data = session.post(api, data=payload, timeout=8).json()
         return data.get("html")
 
     except:
         return None
 
-# ---------- Fragment price ----------
+# ---------- Price ----------
 def fragment_price(html: str):
     if not html:
         return None
@@ -98,8 +106,8 @@ def check(username: str = Query(...)):
             "contact": CONTACT
         }
 
-    # 2️⃣ AVAILABLE (Fragment listing)
-    frag_html = fragment_api_html(username)
+    # 2️⃣ AVAILABLE (Fragment API)
+    frag_html = fragment_api_hit(username)
     if frag_html:
         return {
             "username": f"@{username}",
@@ -113,8 +121,8 @@ def check(username: str = Query(...)):
             "contact": CONTACT
         }
 
-    # 3️⃣ TAKEN (default for old / owned usernames)
-    if telegram_exists(username):
+    # 3️⃣ TAKEN (Fragment page OR Telegram page)
+    if fragment_page_exists(username) or telegram_exists(username):
         return {
             "username": f"@{username}",
             "status": "Taken",
@@ -125,7 +133,7 @@ def check(username: str = Query(...)):
             "contact": CONTACT
         }
 
-    # 4️⃣ FREE (only if NOTHING exists)
+    # 4️⃣ FREE (VERY RARE)
     return {
         "username": f"@{username}",
         "status": "Free",
