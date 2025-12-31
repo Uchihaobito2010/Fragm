@@ -90,7 +90,7 @@ async def root():
         "channel": CHANNEL,
         "portfolio": PORTFOLIO,
         "endpoint": "GET /tobi?username=your_username",
-        "example": "https://your-app.vercel.app/tobi?username=example"
+        "example": "https://tobi-api-fragm.vercel.app/tobi?username=example"
     }
 
 @app.get("/tobi")
