@@ -1,6 +1,6 @@
 """
-Fragment Username Checker API for Vercel
-FastAPI application for checking Telegram username availability on Fragment.com
+Fragment Username Checker API
+Check Telegram username availability on Fragment.com
 """
 
 import re
@@ -33,14 +33,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global variables
+# Global constants
 DEVELOPER = "@Aotpy"
 CHANNEL = "@obitoapi / @obitostuffs"
 
-# Create session
+# Create requests session
 session = requests.Session()
 
-# Update session headers
 def update_session_headers():
     """Update session headers with fresh user agent"""
     session.headers.update({
@@ -86,17 +85,17 @@ class ErrorResponse(BaseModel):
     channel: str = CHANNEL
     timestamp: str
 
-def get_api_hash():
+def get_fragment_api_hash():
     """
     Extract the API hash from fragment.com
+    Returns: API hash string or None if not found
     """
     try:
-        # Update headers before making request
         update_session_headers()
         
         response = session.get(
             "https://fragment.com",
-            timeout=15,
+            timeout=10,
             headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -107,28 +106,17 @@ def get_api_hash():
         # Look for hash in the HTML
         html_content = response.text
         
-        # Pattern 1: hash= followed by 64 hex characters
-        pattern1 = r'hash=([a-fA-F0-9]{64})'
-        match1 = re.search(pattern1, html_content)
+        # Try different patterns to find the hash
+        patterns = [
+            r'hash=([a-fA-F0-9]{64})',
+            r'"hash":"([a-fA-F0-9]{64})"',
+            r'apiUrl.*hash=([a-fA-F0-9]+)'
+        ]
         
-        if match1:
-            return match1.group(1)
-        
-        # Pattern 2: "hash":" followed by 64 hex characters
-        pattern2 = r'"hash":"([a-fA-F0-9]{64})"'
-        match2 = re.search(pattern2, html_content)
-        
-        if match2:
-            return match2.group(1)
-        
-        # Pattern 3: Look in script tags
-        if "apiUrl" in html_content:
-            lines = html_content.split('\n')
-            for line in lines:
-                if "apiUrl" in line and "hash=" in line:
-                    hash_match = re.search(r'hash=([a-fA-F0-9]+)', line)
-                    if hash_match:
-                        return hash_match.group(1)
+        for pattern in patterns:
+            match = re.search(pattern, html_content)
+            if match:
+                return match.group(1)
         
         return None
         
@@ -139,23 +127,23 @@ def get_api_hash():
         print(f"Unexpected error getting API hash: {str(e)}")
         return None
 
-def check_username_on_fragment(username: str, retries: int = 2):
+def check_username_fragment(username: str, retries: int = 2):
     """
-    Check if a username is available on Fragment.com
+    Check username availability on Fragment.com
     """
-    api_hash = get_api_hash()
+    api_hash = get_fragment_api_hash()
     
     if not api_hash:
         return {
             "error": True,
-            "message": "Failed to connect to Fragment.com. Please try again later.",
+            "message": "Unable to connect to Fragment.com. Please try again later.",
             "username": f"@{username}",
             "available": None
         }
     
     api_url = f"https://fragment.com/api?hash={api_hash}"
     
-    # Prepare the request data
+    # Prepare request data
     data = {
         "type": "usernames",
         "query": username,
@@ -177,14 +165,14 @@ def check_username_on_fragment(username: str, retries: int = 2):
                 api_url,
                 data=data,
                 headers=headers,
-                timeout=20
+                timeout=15
             )
             response.raise_for_status()
             
             json_data = response.json()
             
             if "html" not in json_data or not json_data["html"]:
-                # Empty response might mean username is not listed
+                # Empty response usually means username is not listed
                 return {
                     "error": False,
                     "username": f"@{username}",
@@ -238,7 +226,6 @@ def check_username_on_fragment(username: str, retries: int = 2):
                 "username": f"@{username}",
                 "available": None
             }
-            
         except requests.exceptions.RequestException as e:
             if attempt < retries:
                 time.sleep(1)
@@ -249,7 +236,6 @@ def check_username_on_fragment(username: str, retries: int = 2):
                 "username": f"@{username}",
                 "available": None
             }
-            
         except Exception as e:
             return {
                 "error": True,
@@ -265,11 +251,11 @@ def check_username_on_fragment(username: str, retries: int = 2):
         "available": None
     }
 
-# ============ API ENDPOINTS ============
+# ==================== API ENDPOINTS ====================
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint - HTML landing page"""
+    """Root endpoint with HTML landing page"""
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -278,153 +264,99 @@ async def root():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Fragment Username Checker API</title>
         <style>
-            * {{
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }}
-            
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                color: #333;
+                margin: 0;
                 padding: 20px;
+                min-height: 100vh;
             }}
             
             .container {{
-                max-width: 1000px;
+                max-width: 1200px;
                 margin: 0 auto;
-                background: rgba(255, 255, 255, 0.95);
+                background: white;
                 border-radius: 20px;
                 padding: 40px;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                margin-top: 20px;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             }}
             
             header {{
                 text-align: center;
                 margin-bottom: 40px;
                 padding-bottom: 20px;
-                border-bottom: 2px solid #eee;
+                border-bottom: 2px solid #f0f0f0;
             }}
             
             h1 {{
-                color: #667eea;
-                font-size: 2.8em;
+                color: #333;
+                font-size: 2.5em;
                 margin-bottom: 10px;
-                background: linear-gradient(45deg, #667eea, #764ba2);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
             }}
             
             .tagline {{
                 color: #666;
                 font-size: 1.2em;
-                margin-bottom: 20px;
+                margin-bottom: 30px;
             }}
             
             .cards {{
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 25px;
+                gap: 20px;
                 margin: 30px 0;
             }}
             
             .card {{
-                background: white;
-                border-radius: 15px;
-                padding: 25px;
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-                border: 1px solid #eaeaea;
-                transition: transform 0.3s, box-shadow 0.3s;
-            }}
-            
-            .card:hover {{
-                transform: translateY(-5px);
-                box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+                background: #f8f9fa;
+                border-radius: 10px;
+                padding: 20px;
+                border: 1px solid #e0e0e0;
             }}
             
             .card h3 {{
                 color: #667eea;
-                margin-bottom: 15px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }}
-            
-            .card h3 i {{
-                font-size: 1.2em;
-            }}
-            
-            .code-block {{
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 10px;
-                font-family: 'Courier New', monospace;
-                margin: 15px 0;
-                border-left: 4px solid #667eea;
-                overflow-x: auto;
+                margin-top: 0;
             }}
             
             .endpoint {{
-                background: #f0f4ff;
-                padding: 12px;
-                border-radius: 8px;
-                margin: 8px 0;
-                border-left: 3px solid #764ba2;
+                background: #e8f4ff;
+                padding: 10px;
+                border-radius: 5px;
+                margin: 10px 0;
+                font-family: monospace;
+                border-left: 3px solid #667eea;
             }}
             
             .btn {{
                 display: inline-block;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: #667eea;
                 color: white;
-                padding: 14px 28px;
+                padding: 12px 24px;
                 text-decoration: none;
-                border-radius: 10px;
+                border-radius: 5px;
+                margin: 5px;
                 font-weight: bold;
-                margin: 10px 5px;
-                transition: all 0.3s;
-                border: none;
-                cursor: pointer;
-                font-size: 16px;
             }}
             
             .btn:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-            }}
-            
-            .btn-secondary {{
-                background: #6c757d;
-            }}
-            
-            .btn-success {{
-                background: #28a745;
-            }}
-            
-            .examples {{
-                background: #f8f9fa;
-                border-radius: 15px;
-                padding: 25px;
-                margin: 30px 0;
+                background: #5a6fd8;
             }}
             
             .response-example {{
-                background: #1a1a1a;
+                background: #2d2d2d;
                 color: #f8f9fa;
                 padding: 20px;
-                border-radius: 10px;
-                font-family: 'Courier New', monospace;
-                margin: 15px 0;
+                border-radius: 5px;
+                font-family: monospace;
                 overflow-x: auto;
             }}
             
-            .footer {{
+            footer {{
                 text-align: center;
                 margin-top: 40px;
                 padding-top: 20px;
-                border-top: 1px solid #eee;
+                border-top: 1px solid #f0f0f0;
                 color: #666;
             }}
             
@@ -434,83 +366,63 @@ async def root():
                 }}
                 
                 h1 {{
-                    font-size: 2em;
-                }}
-                
-                .cards {{
-                    grid-template-columns: 1fr;
+                    font-size: 1.8em;
                 }}
             }}
         </style>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     </head>
     <body>
         <div class="container">
             <header>
-                <h1><i class="fas fa-search"></i> Fragment Username Checker API</h1>
+                <h1>Fragment Username Checker API</h1>
                 <p class="tagline">Check Telegram username availability on Fragment.com</p>
                 <div>
-                    <a href="/docs" class="btn"><i class="fas fa-book"></i> API Documentation</a>
-                    <a href="/redoc" class="btn btn-secondary"><i class="fas fa-file-alt"></i> ReDoc</a>
-                    <a href="/health" class="btn btn-success"><i class="fas fa-heartbeat"></i> Health Check</a>
+                    <a href="/docs" class="btn">API Documentation</a>
+                    <a href="/username?username=test" class="btn">Test API</a>
+                    <a href="/health" class="btn">Health Check</a>
                 </div>
             </header>
             
-            <section class="cards">
-                <div class="card">
-                    <h3><i class="fas fa-globe"></i> API Endpoints</h3>
-                    <div class="endpoint">
-                        <strong>GET /username</strong><br>
-                        <small>Check username availability</small><br>
-                        <code>/username?username=your_username</code>
+            <section>
+                <h2>API Endpoints</h2>
+                <div class="cards">
+                    <div class="card">
+                        <h3>Check Username</h3>
+                        <div class="endpoint">GET /username?username=your_username</div>
+                        <div class="endpoint">POST /username {{"username": "your_username"}}</div>
                     </div>
-                    <div class="endpoint">
-                        <strong>POST /username</strong><br>
-                        <small>Check username with JSON</small><br>
-                        <code>{{"username": "your_username"}}</code>
+                    
+                    <div class="card">
+                        <h3>Health Check</h3>
+                        <div class="endpoint">GET /health</div>
                     </div>
-                    <div class="endpoint">
-                        <strong>GET /health</strong><br>
-                        <small>API health status</small>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <h3><i class="fas fa-bolt"></i> Quick Test</h3>
-                    <p>Test the API immediately:</p>
-                    <div class="code-block">
-                        <a href="/username?username=test" target="_blank">/username?username=test</a>
-                    </div>
-                    <p>Or try with curl:</p>
-                    <div class="code-block">
-                        curl "https://{app.title}.vercel.app/username?username=obito"
+                    
+                    <div class="card">
+                        <h3>Documentation</h3>
+                        <div class="endpoint">GET /docs (Swagger UI)</div>
+                        <div class="endpoint">GET /redoc (ReDoc)</div>
                     </div>
                 </div>
             </section>
             
-            <section class="examples">
-                <h2><i class="fas fa-code"></i> Example Usage</h2>
+            <section>
+                <h2>Quick Examples</h2>
+                <h3>Using curl:</h3>
+                <div class="endpoint">curl "https://YOUR_APP.vercel.app/username?username=obito"</div>
                 
-                <h3>Python Example:</h3>
-                <div class="code-block">
+                <h3>Using Python:</h3>
+                <div class="response-example">
 import requests<br>
-<br>
-# Check username<br>
 response = requests.get(<br>
-    "https://your-app.vercel.app/username",<br>
+    "https://YOUR_APP.vercel.app/username",<br>
     params={{"username": "obito"}}<br>
 )<br>
 print(response.json())
                 </div>
-                
-                <h3>JavaScript Example:</h3>
-                <div class="code-block">
-fetch('https://your-app.vercel.app/username?username=obito')<br>
-  .then(response => response.json())<br>
-  .then(data => console.log(data));
-                </div>
-                
-                <h3>Example Response:</h3>
+            </section>
+            
+            <section>
+                <h2>Example Response</h2>
                 <div class="response-example">
 {{
   "username": "@obito",
@@ -520,64 +432,17 @@ fetch('https://your-app.vercel.app/username?username=obito')<br>
   "message": "❌ Not available on Fragment",
   "developer": "@Aotpy",
   "channel": "@obitoapi / @obitostuffs",
-  "timestamp": "2024-01-15T10:30:00Z"
+  "timestamp": "2024-01-15T10:30:00.000Z"
 }}
                 </div>
             </section>
             
-            <section>
-                <h2><i class="fas fa-info-circle"></i> About This API</h2>
-                <p>This API checks the availability of Telegram usernames on <a href="https://fragment.com" target="_blank">Fragment.com</a>, the official Telegram auction platform.</p>
-                
-                <h3>Features:</h3>
-                <ul style="margin-left: 20px; margin-bottom: 20px;">
-                    <li>Real-time username availability checking</li>
-                    <li>Fast and reliable API</li>
-                    <li>JSON responses</li>
-                    <li>CORS enabled</li>
-                    <li>Rate limiting protection</li>
-                    <li>Automatic retry mechanism</li>
-                </ul>
-            </section>
-            
-            <footer class="footer">
+            <footer>
                 <p><strong>Developer:</strong> {DEVELOPER}</p>
                 <p><strong>Channel:</strong> {CHANNEL}</p>
                 <p><strong>Version:</strong> 2.0.0</p>
-                <p>© {datetime.datetime.now().year} Fragment Username Checker API</p>
             </footer>
         </div>
-        
-        <script>
-            // Add copy functionality to code blocks
-            document.querySelectorAll('.code-block').forEach(block => {{
-                block.addEventListener('click', function() {{
-                    const text = this.textContent || this.innerText;
-                    navigator.clipboard.writeText(text.trim()).then(() => {{
-                        const original = this.innerHTML;
-                        this.innerHTML = '<i class="fas fa-check"></i> Copied to clipboard!';
-                        this.style.background = '#d4edda';
-                        setTimeout(() => {{
-                            this.innerHTML = original;
-                            this.style.background = '';
-                        }}, 2000);
-                    }});
-                }});
-            }});
-            
-            // Add smooth scrolling for anchor links
-            document.querySelectorAll('a[href^="#"]').forEach(anchor => {{
-                anchor.addEventListener('click', function (e) {{
-                    e.preventDefault();
-                    const target = document.querySelector(this.getAttribute('href'));
-                    if (target) {{
-                        target.scrollIntoView({{
-                            behavior: 'smooth'
-                        }});
-                    }}
-                }});
-            }});
-        </script>
     </body>
     </html>
     """
@@ -605,13 +470,7 @@ async def check_username(
     """
     Check if a Telegram username is available on Fragment.com
     
-    This endpoint queries Fragment.com to check the availability and price of a Telegram username.
-    
-    Parameters:
-    - **username**: The Telegram username to check (1-32 characters, letters/numbers/underscores only)
-    
-    Returns:
-    - JSON response with username availability, price, and status
+    - **username**: The Telegram username to check (1-32 characters)
     """
     # Clean and validate username
     username = username.strip().lower().replace('@', '')
@@ -626,11 +485,11 @@ async def check_username(
     if not re.match(r'^[a-zA-Z0-9_]{1,32}$', username):
         raise HTTPException(
             status_code=400,
-            detail="Invalid username format. Username must be 1-32 characters containing only letters, numbers, and underscores."
+            detail="Invalid username format. Use only letters, numbers, and underscores (1-32 characters)."
         )
     
     # Check username on Fragment
-    result = check_username_on_fragment(username)
+    result = check_username_fragment(username)
     
     if result.get("error", False):
         raise HTTPException(
@@ -649,8 +508,6 @@ async def check_username(
 async def check_username_post(request: UsernameRequest):
     """
     Check username availability using POST method
-    
-    Alternative endpoint for checking username with JSON body
     """
     username = request.username.strip().lower().replace('@', '')
     
@@ -664,11 +521,11 @@ async def check_username_post(request: UsernameRequest):
     if not re.match(r'^[a-zA-Z0-9_]{1,32}$', username):
         raise HTTPException(
             status_code=400,
-            detail="Invalid username format. Username must be 1-32 characters containing only letters, numbers, and underscores."
+            detail="Invalid username format. Use only letters, numbers, and underscores (1-32 characters)."
         )
     
     # Check username on Fragment
-    result = check_username_on_fragment(username)
+    result = check_username_fragment(username)
     
     if result.get("error", False):
         raise HTTPException(
@@ -692,9 +549,7 @@ async def check_batch_usernames(
     )
 ):
     """
-    Check multiple usernames at once (limited to 5)
-    
-    Useful for checking availability of multiple usernames in a single request.
+    Check multiple usernames at once
     """
     # Parse and clean usernames
     username_list = [u.strip().lower().replace('@', '') for u in usernames.split(',')]
@@ -715,7 +570,7 @@ async def check_batch_usernames(
     # Check each username
     results = []
     for username in username_list:
-        result = check_username_on_fragment(username)
+        result = check_username_fragment(username)
         result["timestamp"] = datetime.datetime.now().isoformat()
         results.append(result)
     
@@ -735,14 +590,7 @@ async def not_found_handler(request, exc):
         content={
             "error": True,
             "message": f"Endpoint {request.url.path} not found",
-            "available_endpoints": [
-                "/",
-                "/docs",
-                "/redoc",
-                "/health",
-                "/username",
-                "/batch"
-            ],
+            "available_endpoints": ["/", "/docs", "/health", "/username", "/batch"],
             "developer": DEVELOPER,
             "channel": CHANNEL,
             "timestamp": datetime.datetime.now().isoformat()
@@ -762,5 +610,9 @@ async def server_error_handler(request, exc):
         }
     )
 
-# Vercel requires the app to be accessible
-# No need for handler function - Vercel will use the ASGI app directly
+# Vercel handler
+def handler(request, context):
+    """Vercel serverless function handler"""
+    from mangum import Mangum
+    asgi_handler = Mangum(app)
+    return asgi_handler(request, context)
