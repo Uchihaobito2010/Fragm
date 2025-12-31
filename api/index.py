@@ -127,7 +127,9 @@ def check_username(username: str = Query(..., min_length=1)):
             "status": "Taken",
             "on_fragment": False,
             "price_ton": "Unknown",
-            "can_claim": False
+            "can_claim": False,
+            "api_owner": OWNER,
+            "contact": CONTACT,
         }
 
     # 2️⃣ Fragment page
@@ -141,7 +143,9 @@ def check_username(username: str = Query(..., min_length=1)):
             "price_ton": price or "Unknown",
             "can_claim": False,
             "message": "Buy from Fragment",
-            "fragment_url": f"https://fragment.com/username/{username}"
+            "fragment_url": f"https://fragment.com/username/{username}",
+            "api_owner": OWNER,
+            "contact": CONTACT,
         }
 
     # 3️⃣ Claimable
@@ -151,7 +155,9 @@ def check_username(username: str = Query(..., min_length=1)):
         "on_fragment": False,
         "price_ton": "Unknown",
         "can_claim": True,
-        "message": "Can be claimed directly"
+        "message": "Can be claimed directly",
+        "api_owner": OWNER,
+        "contact": CONTACT,
     }
 
 # ================== REQUIRED FOR VERCEL ==================
