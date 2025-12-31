@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from user_agent import generate_user_agent
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse
 import uvicorn
 
 app = FastAPI(title="Fragment Username Checker API")
@@ -70,16 +70,23 @@ def check_fgusername(username: str, retries=3):
     status = elements[2].get_text(strip=True)
 
     available = status.lower() == "unavailable"
-    message = "✅ This username might be free or not listed on Fragment" if available else ""
+    
+    # Determine status text
+    status_text = "Available" if not available else "Not available"
+    
+    # Determine if on fragment
+    on_fragment = "Yes" if not available else "No"
+    
+    # Can claim logic
+    can_claim = "Yes" if available else "No"
 
     return {
         "developer": DEVELOPER,
         "username": tag,
+        "status": status_text,
         "price": price,
-        "status": status,
-        "available": available,
-        "message": message
-        
+        "on_fragment": on_fragment,
+        "can_claim": can_claim
     }
 
 @app.get("/")
@@ -90,7 +97,7 @@ async def root():
         "channel": CHANNEL,
         "portfolio": PORTFOLIO,
         "endpoint": "GET /tobi?username=your_username",
-        "example": "https://tobi-api-fragm.vercel.app/tobi?username=example"
+        "example": "https://your-app.vercel.app/tobi?username=example"
     }
 
 @app.get("/tobi")
